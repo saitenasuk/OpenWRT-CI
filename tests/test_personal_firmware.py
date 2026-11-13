@@ -4,6 +4,8 @@ import importlib.util
 from io import StringIO
 from pathlib import Path
 import tempfile
+import os
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +20,8 @@ def load(name, filename):
 
 check = load('personal_config', 'check-personal-config.py')
 patch = load('vpn_packages', 'customize-vpn-packages.py')
+feeds = load('personal_feeds', 'prepare-personal-feeds.py')
+prune = load('feed_links', 'prune-unused-feed-links.py')
 
 
 class ConfigTests(unittest.TestCase):
@@ -100,7 +104,7 @@ option fwd_lan_ts '1'
         self.write(self.et + '/root/etc/config/easytier', "option enabled '0'\n")
         self.write('package/luci-app-openclash/root/etc/config/openclash', "option enable '0'\n")
         self.write('package/netspeedtest/luci-app-netspeedtest/Makefile',
-                   'LUCI_DEPENDS:=+python3-light +python3-pkg-resources +iperf3-ssl\n')
+                   'LUCI_DEPENDS:=+python3-light +python3-pkg-resources +python3-email +python3-urllib $(if $(find_package iperf3-ssl),+iperf3-ssl,+iperf3)\n')
         self.write('package/netspeedtest/luci-app-netspeedtest/root/usr/bin/speedtest', 'import csv\n')
 
     def write(self, name, content):
@@ -126,6 +130,11 @@ option fwd_lan_ts '1'
         self.assertNotIn('$(call BuildPackage', mk)
         self.assertIn('# call BuildPackage - OpenWrt buildroot signature', mk)
         self.assertNotIn('python3-pkg-resources', (self.root / 'package/netspeedtest/luci-app-netspeedtest/Makefile').read_text())
+        speed_mk = (self.root / 'package/netspeedtest/luci-app-netspeedtest/Makefile').read_text()
+        self.assertNotIn('+python3-email', speed_mk)
+        self.assertIn('+python3-urllib', speed_mk)
+        self.assertIn('+iperf3-ssl', speed_mk)
+        self.assertNotIn('find_package', speed_mk)
         self.assertLess(mk.index('/postinst'), mk.index('include $(TOPDIR)/feeds/luci/luci.mk'))
         init = (self.root / 'feeds/packages/net/netbird/files/netbird.init').read_text()
         self.assertEqual(init.count('# arthur-netbird-boot-guard'), 1)
@@ -140,6 +149,84 @@ option fwd_lan_ts '1'
         self.write(self.nb + '/root/etc/config/netbird', '# incompatible new schema')
         with self.assertRaisesRegex(RuntimeError, 'Upstream changed'):
             self.run_patch()
+
+
+class FeedScopeTests(unittest.TestCase):
+    def test_disabled_feeds_are_filtered_before_install(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            p = root / 'feeds.conf.default'
+            p.write_text('src-git packages https://example.test/packages.git\n'
+                         'src-git luci https://example.test/luci.git\n'
+                         'src-git video https://example.test/video.git\n'
+                         'src-git pon_drivers https://example.test/pon.git\n'
+                         '#src-git video https://example.test/comment.git\n')
+            with redirect_stdout(StringIO()):
+                feeds.prepare(root)
+                result = p.read_text()
+                feeds.prepare(root)
+            self.assertEqual(p.read_text(), result)
+            self.assertIn('src-git packages ', result)
+            self.assertIn('src-git luci ', result)
+            self.assertNotIn('\nsrc-git video ', result)
+            self.assertNotIn('\nsrc-git pon_drivers ', result)
+            self.assertIn('#src-git video ', result)
+
+    def test_prune_only_targeted_feed_symlinks_not_sources(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for src in prune.EXCLUDED_SOURCES + ('feeds/packages/net/iperf3',):
+                target = root / src
+                target.mkdir(parents=True)
+                (target / 'Makefile').write_text('# preserved source')
+                feed = src.split('/')[1]
+                link = root / 'package/feeds' / feed / target.name
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(target, target_is_directory=True)
+            with redirect_stdout(StringIO()):
+                prune.prune(root)
+                prune.prune(root)
+            for src in prune.EXCLUDED_SOURCES:
+                self.assertTrue((root / src / 'Makefile').is_file())
+                self.assertFalse((root / 'package/feeds' / src.split('/')[1] / Path(src).name).is_symlink())
+            self.assertTrue((root / 'package/feeds/packages/iperf3').is_symlink())
+
+    def test_custom_sources_exclude_unused_circular_definitions(self):
+        import shlex
+        sources = [shlex.split(line)[1] for line in (ROOT / 'Scripts/Packages.sh').read_text().splitlines()
+                   if line.startswith('UPDATE_PACKAGE ')]
+        self.assertEqual(set(sources), {'vantage', 'openclash', 'diskmanager', 'easytier',
+                                       'viking', 'netspeedtest', 'partexp', 'natmapt',
+                                       'stuntman', 'luci-app-natmapt'})
+
+
+class DefconfigLogTests(unittest.TestCase):
+    def test_recursive_diagnostic_is_fatal_even_when_make_returns_zero(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bin_dir = root / 'bin'
+            bin_dir.mkdir()
+            make = bin_dir / 'make'
+            make.write_text('#!/bin/sh\necho "sample: error: recursive dependency detected!"\n'
+                            'printf "CONFIG_TEST=y\\n" > .config\nexit 0\n')
+            make.chmod(0o755)
+            env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'],
+                       GITHUB_WORKSPACE=str(root))
+            proc = subprocess.run(['bash', str(ROOT / 'Scripts/run-personal-defconfig.sh')],
+                                  cwd=root, env=env, capture_output=True, text=True)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn('Kconfig contains recursive dependencies', proc.stderr)
+            self.assertTrue((root / 'build-reports/defconfig.log').is_file())
+            self.assertEqual((root / 'build-reports/config.txt').read_text(), 'CONFIG_TEST=y\n')
+
+    def test_speedtest_make_expression_selects_ssl_after_patch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            # Match the dependency syntax used by the real package metadata scanner.
+            p = Path(temp) / 'Makefile'
+            p.write_text('DEPS:=+python3-urllib +iperf3-ssl\nall:;@echo "$(DEPS)"\n')
+            result = subprocess.check_output(['make', '-s', '-f', str(p)], text=True).strip().split()
+            self.assertIn('+iperf3-ssl', result)
+            self.assertNotIn('+iperf3', result)
 
 
 if __name__ == '__main__':

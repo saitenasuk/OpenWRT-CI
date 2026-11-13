@@ -157,51 +157,24 @@ kmod-veth
 kmod-wireguard
 ```
 
-## 6. Packages.sh 准备的额外源码
+## 6. 当前准备的额外源码
 
-**获取源码不等于选择编入镜像。** 以下为 `Scripts/Packages.sh` 当前全部 `UPDATE_PACKAGE` 调用；其中部分包已在第 1、2 节选中，其余只是可选来源。软件源 feeds 中另有其他可选包，此处不是全部可用插件目录。
+只拉取已选应用 / 主题和必要依赖；未选的代理、QModem、下载器和主题不再参与包扫描。这不限制以后按需添加，但新增前需重新核对依赖。
 
-| 脚本匹配名 | 仓库 | 分支 | 额外替换名 |
-|---|---|---|---|
-| `argon` | `sbwml/luci-theme-argon` | `openwrt-25.12` | — |
-| `aurora` | `eamonxg/luci-theme-aurora` | `master` | — |
-| `aurora-config` | `eamonxg/luci-app-aurora-config` | `master` | — |
-| `fluent` | `LazuliKao/luci-theme-fluent` | `main` | — |
-| `footstrap` | `VizzleTF/luci-theme-footstrap` | `main` | — |
-| `kucat` | `sirpdboy/luci-theme-kucat` | `master` | — |
-| `kucat-config` | `sirpdboy/luci-app-kucat-config` | `master` | — |
-| `shadcn` | `eamonxg/luci-theme-shadcn` | `main` | — |
-| `vantage` | `anothaDev/luci-theme-vantage` | `main` | — |
-| `momo` | `nikkinikki-org/OpenWrt-momo` | `main` | — |
-| `nikki` | `nikkinikki-org/OpenWrt-nikki` | `main` | — |
-| `openclash` | `vernesong/OpenClash` | `dev` | — |
-| `passwall` | `Openwrt-Passwall/openwrt-passwall` | `main` | — |
-| `passwall2` | `Openwrt-Passwall/openwrt-passwall2` | `main` | — |
-| `diskmanager` | `4IceG/luci-app-mini-diskmanager` | `main` | — |
-| `easytier` | `EasyTier/luci-app-easytier` | `main` | — |
-| `qmodem` | `FUjr/QModem` | `main` | — |
-| `viking` | `VIKINGYFY/packages` | `main` | `axonhub gecoosac miniupnpd sing-box luci-app-homeproxy luci-app-timewol luci-app-upnp luci-app-wolplus luci-app-wolultra` |
-| `diskman` | `sbwml/luci-app-diskman` | `main` | — |
-| `mosdns` | `sbwml/luci-app-mosdns` | `v5` | `v2dat` |
-| `openlist2` | `sbwml/luci-app-openlist2` | `main` | — |
-| `qbittorrent` | `sbwml/luci-app-qbittorrent` | `master` | `qt6base qt6tools rblibtorrent` |
-| `quickfile` | `sbwml/luci-app-quickfile` | `main` | — |
-| `ddns-go` | `sirpdboy/luci-app-ddns-go` | `main` | — |
-| `netspeedtest` | `sirpdboy/netspeedtest` | `main` | `homebox ookla-speedtest` |
-| `netwizard` | `sirpdboy/luci-app-netwizard` | `main` | — |
-| `partexp` | `sirpdboy/luci-app-partexp` | `main` | — |
-| `timecontrol` | `sirpdboy/luci-app-timecontrol` | `main` | — |
-| `natmapt` | `muink/openwrt-natmapt` | `master` | — |
-| `stuntman` | `muink/openwrt-stuntman` | `master` | — |
-| `luci-app-natmapt` | `muink/luci-app-natmapt` | `master` | — |
-| `airpi3000m-fancontrol` | `LianXia233/luci-app-airpi3000m-fancontrol` | `main` | — |
-| `chfs` | `LianXia233/luci-app-chfs` | `main` | — |
-| `fm350` | `LianXia233/luci-app-fm350` | `main` | — |
-| `h5000m-netmode` | `LianXia233/luci-app-h5000m-netmode` | `main` | — |
-| `mt5700` | `LianXia233/luci-app-mt5700` | `main` | — |
-| `mt5700m` | `LianXia233/luci-app-mt5700m` | `main` | — |
-| `netmonitor` | `LianXia233/luci-app-netmonitor` | `main` | — |
-| `qmodem-generic` | `LianXia233/luci-app-qmodem-generic` | `main` | — |
+| 脚本匹配名 | 仓库 | 分支 |
+|---|---|---|
+| `vantage` | `anothaDev/luci-theme-vantage` | `main` |
+| `openclash` | `vernesong/OpenClash` | `dev` |
+| `diskmanager` | `4IceG/luci-app-mini-diskmanager` | `main` |
+| `easytier` | `EasyTier/luci-app-easytier` | `main` |
+| `viking` | `VIKINGYFY/packages` | `main` |
+| `netspeedtest` | `sirpdboy/netspeedtest` | `main` |
+| `partexp` | `sirpdboy/luci-app-partexp` | `main` |
+| `natmapt` | `muink/openwrt-natmapt` | `master` |
+| `stuntman` | `muink/openwrt-stuntman` | `master` |
+| `luci-app-natmapt` | `muink/luci-app-natmapt` | `master` |
+
+NetBird 和 whzhni1 Tailscale 由 `Scripts/PRIVATE.sh` 另行固定提交引入。
 
 ## 7. 配置计数及下一步
 
@@ -216,7 +189,7 @@ kmod-wireguard
 - NetBird：`looong-cat/luci-app-netbird`，提交 `de70650ff79abd24b114c045473cf16f118a3957`。
 - Tailscale：`whzhni1/luci-app-tailscale`，提交 `1274256218dd1b638a183a0e5b2bef5df17eb8d2`。
 - Tailscale：移除当前源码不存在且后端未使用的 `ucode-mod-html` 依赖；将包生命周期钩子放到 `luci.mk` include 前，避免重复 BuildPackage，同时保留包扫描标识。
-- 网络测速：移除当前软件源已不提供、脚本也没有导入的 `python3-pkg-resources` 旧依赖。
+- 网络测速：移除当前软件源已不提供、脚本也没有导入的 `python3-pkg-resources` 旧依赖；将旧 `python3-email` 名称移除，email 模块仍由已有 `python3-urllib` 依赖提供；固定依赖 `iperf3-ssl`，不再使用上游错误的探测表达式。
 - NetBird：显式带入上游 EXTRA_DEPENDS 中的整机编译依赖；默认关闭服务、LAN 转发、远端子网路由，并为核心 init 的 boot 动作增加主开关检查。
 - Tailscale：保留原有关闭状态、关闭 DNS / 路由接受与自动核心升级，并关闭预设的双向 LAN 转发；用户启用后可按需打开。
 - EasyTier / OpenClash：验证源配置中的总开关默认为关闭；EasyTier 地址和掩码尚未设置，启用前必须规划。

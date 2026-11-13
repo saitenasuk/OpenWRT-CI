@@ -1,0 +1,4 @@
+# Generated local and CI diagnostic artifacts
+/build-reports/
+__pycache__/
+*.py[cod]

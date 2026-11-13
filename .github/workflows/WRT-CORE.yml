@@ -169,8 +169,10 @@ jobs:
         run: |
           cd ./wrt/
 
+          python3 "$GITHUB_WORKSPACE/Scripts/prepare-personal-feeds.py" .
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          python3 "$GITHUB_WORKSPACE/Scripts/prune-unused-feed-links.py" .
 
       - name: Custom Packages
         run: |
@@ -193,8 +195,7 @@ jobs:
           $GITHUB_WORKSPACE/Scripts/Settings.sh
           $GITHUB_WORKSPACE/.github/scripts/prepare-build-host.sh
 
-          make defconfig -j$(nproc)
-          python3 "$GITHUB_WORKSPACE/Scripts/check-personal-config.py" .config "$GITHUB_WORKSPACE/Config/PRIVATE.txt"
+          bash "$GITHUB_WORKSPACE/Scripts/run-personal-defconfig.sh"
           make clean -j$(nproc)
 
       - name: Prepare Rust Toolchain
@@ -221,7 +222,7 @@ jobs:
             make -j1 V=s BUILD_TIME_LOG="$GITHUB_WORKSPACE/build-reports/serial.tsv"
 
       - name: Collect Build Reports
-        if: ${{ !inputs.WRT_TEST && always() }}
+        if: ${{ always() && steps.clone-code.outcome == 'success' }}
         continue-on-error: true
         run: |
           cd ./wrt/
@@ -229,7 +230,7 @@ jobs:
           $GITHUB_WORKSPACE/.github/scripts/collect-build-reports.sh
 
       - name: Upload Build Reports
-        if: ${{ !inputs.WRT_TEST && always() }}
+        if: ${{ always() }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:

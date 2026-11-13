@@ -27,7 +27,7 @@ Actions → `WRT-TEST` → Run workflow：
 - TEST：`true`
 
 此过程仍会准备源码和软件源，但不编译固件。关注日志中 `Personal configuration validated`。
-缺包、依赖冲突、选项被取消应先修复，不要绕过检查。生成的 `Config-...txt` 需包含 11 个应用、EasyTier / NetBird 核心、TUN / WireGuard 模块，且没有三个已删除应用及专用服务、普通 iperf3 和 feeds 的 Tailscale 包。
+缺包、依赖冲突、选项被取消应先修复，不要绕过检查。即使 `make defconfig` 返回成功，只要日志含循环依赖也会停止；失败后的 Actions Artifacts 中查看 `build-reports-*`，重点为 `defconfig.log`、`config.txt`、`config-validation.log`（若已执行）。生成的 `Config-...txt` 需包含 11 个应用、EasyTier / NetBird 核心、TUN / WireGuard 模块，且没有三个已删除应用及专用服务、普通 iperf3 和 feeds 的 Tailscale 包。
 
 ## 下一步 3：正式编译
 
@@ -67,3 +67,18 @@ cat /proc/partitions
 - 并行运行还需观察 CPU、内存与吞吐；支持 ARM64 不等于三种 VPN 并发满速已验证。
 
 参考已核对的项目 README / Makefile：`looong-cat/luci-app-netbird`、`whzhni1/luci-app-tailscale`、`EasyTier/luci-app-easytier`；地址与并行 VPN 风险参考 NetBird How NetBird Works、Tailscale Other VPNs 官方文档。
+
+## 2026-11-14：首次配置检查失败修复
+
+- 直接失败：网络测速源码的 `$(if $(find_package iperf3-ssl),+iperf3-ssl,+iperf3)` 在元数据扫描时落到普通 `iperf3`，与个人配置的 SSL 版选择冲突；现在将依赖明确固定为 `+iperf3-ssl`，不放松配置检查。
+- `python3-email` 已不是独立包；当前软件源的 `python3-urllib` 包含 email 模块，保留 urllib 并移除旧依赖名。
+- 仅设置 `CONFIG_FEED_video=n` 并不能阻止已安装 feed 定义参与 Kconfig 扫描。现在在 feeds update/install 前过滤 video / PON 源。
+- 不再下载未选择的 Nikki、Momo、QModem、qBittorrent 和其他无用源码；OpenClash 内置核心是独立于 Nikki 的 `mihomo-alpha` / `mihomo-meta` 软件包的机制，未在本次改变其渠道。
+- 只移除 `package/feeds` 下指向未使用 fwknopd 页面和 Squeezelite 的符号链接，保留 feeds 源码，不改写它们的依赖逻辑。
+- 新提交推送后应从 `main` 新建一次 WRT-TEST；对旧运行点 Re-run 会继续使用旧提交。
+
+### 本地验证记录
+
+2026-11-14 使用真实 `VIKINGYFY/immortalwrt` 源码提交 `146dc3d5badc0531072f0d0da7114cd667cc63c2`、实际 feeds 和选定插件源码执行 `make defconfig` 与配置检查，通过 35 项覆盖配置及单机型检查；13 项本地回归测试通过。
+
+此次验证不是 GitHub 托管环境的完整构建，未编译工具链或生成可刷写固件。仍有未选中 GStreamer 插件对 video 源图形库的 3 条缺失依赖警告，当前配置未选择相关包，不影响上述配置检查；不要将它们与已经消除的 Kconfig 循环依赖混淆。

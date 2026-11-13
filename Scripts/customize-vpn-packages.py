@@ -57,7 +57,21 @@ def customize(root):
             if 'pkg_resources' in code:
                 raise RuntimeError(f'Unexpected pkg_resources usage: {path}')
     speed_mk = speedtest / 'Makefile'
-    speed_mk.write_text(speed_mk.read_text().replace(' +python3-pkg-resources', ''))
+    speed_text = speed_mk.read_text().replace(' +python3-pkg-resources', '')
+    # This feed bundles the email module in python3-urllib, not python3-email.
+    # Keep urllib so removing the obsolete package name does not drop email.
+    if '+python3-urllib' not in speed_text:
+        raise RuntimeError('netspeedtest no longer depends on python3-urllib; review email dependency')
+    speed_text = speed_text.replace(' +python3-email', '')
+    # Upstream's $(find_package ...) is not a valid package-existence lookup
+    # during OpenWrt metadata scanning and falls back to the non-SSL variant.
+    # Select one concrete implementation to match Config/PRIVATE.txt.
+    fallback = '$(if $(find_package iperf3-ssl),+iperf3-ssl,+iperf3)'
+    if fallback in speed_text:
+        speed_text = speed_text.replace(fallback, '+iperf3-ssl')
+    if '+iperf3-ssl' not in speed_text or re.search(r'\+iperf3(?=\s|$)', speed_text):
+        raise RuntimeError('Unexpected netspeedtest iperf3 dependency; inspect upstream recipe')
+    speed_mk.write_text(speed_text)
 
     # Fresh installs must not enroll, export the LAN or import remote routes.
     netbird_configs = [netbird / 'root/etc/config/netbird',

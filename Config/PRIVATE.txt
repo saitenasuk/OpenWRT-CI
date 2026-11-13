@@ -1,0 +1,49 @@
+# 亚瑟个人插件选择；由 Settings.sh 在 GENERAL.txt 之后追加。
+# 删除应用及其专用后台服务。其他仍需要的公共依赖由 Kconfig 解析。
+CONFIG_PACKAGE_luci-app-homeproxy=n
+CONFIG_PACKAGE_sing-box=n
+CONFIG_PACKAGE_luci-app-gecoosac=n
+CONFIG_PACKAGE_gecoosac=n
+CONFIG_PACKAGE_luci-app-samba4=n
+CONFIG_PACKAGE_samba4-server=n
+CONFIG_PACKAGE_samba4-client=n
+
+# 保留原有应用，也交由配置检查验证没有被依赖解析丢弃。
+CONFIG_PACKAGE_luci-app-autoreboot=y
+CONFIG_PACKAGE_luci-app-mini-diskmanager=y
+CONFIG_PACKAGE_luci-app-natmapt=y
+CONFIG_PACKAGE_luci-app-partexp=y
+CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_luci-app-wolultra=y
+
+# 新增应用。
+CONFIG_PACKAGE_luci-app-openclash=y
+# 随固件内置 Mihomo 核心；版本锁定仍需后续统一处理。
+CONFIG_LUCI_APP_OPENCLASH_INCLUDE_CORE=y
+CONFIG_PACKAGE_luci-app-easytier=y
+CONFIG_PACKAGE_easytier=y
+CONFIG_PACKAGE_easytier-noweb=n
+CONFIG_PACKAGE_luci-app-netspeedtest=y
+# 测速插件优先依赖 SSL 版；不可与普通 iperf3 同时安装。
+CONFIG_PACKAGE_iperf3=n
+CONFIG_PACKAGE_iperf3-ssl=y
+CONFIG_PACKAGE_luci-app-netbird=y
+CONFIG_PACKAGE_netbird=y
+CONFIG_PACKAGE_luci-app-tailscale=y
+
+# whzhni1 的插件自带服务管理和核心下载器，不并装 feeds 的同名核心服务包。
+CONFIG_PACKAGE_tailscale=n
+CONFIG_PACKAGE_tailscaled=n
+
+# 自编译内核所需模块直接随镜像构建，避免刷机后从不匹配的软件源补装。
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_kmod-wireguard=y
+
+# NetBird 插件上游仅声明运行时 EXTRA_DEPENDS；整机编译必须显式选中。
+CONFIG_PACKAGE_rpcd=y
+CONFIG_PACKAGE_rpcd-mod-ucode=y
+CONFIG_PACKAGE_ucode=y
+CONFIG_PACKAGE_ucode-mod-fs=y
+CONFIG_PACKAGE_ucode-mod-uci=y
+CONFIG_PACKAGE_luci-base=y
+CONFIG_PACKAGE_conntrack=y

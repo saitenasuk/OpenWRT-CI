@@ -193,7 +193,9 @@ jobs:
           $GITHUB_WORKSPACE/Scripts/Settings.sh
           $GITHUB_WORKSPACE/.github/scripts/prepare-build-host.sh
 
-          make defconfig -j$(nproc) && make clean -j$(nproc)
+          make defconfig -j$(nproc)
+          python3 "$GITHUB_WORKSPACE/Scripts/check-personal-config.py" .config "$GITHUB_WORKSPACE/Config/PRIVATE.txt"
+          make clean -j$(nproc)
 
       - name: Prepare Rust Toolchain
         if: ${{ !inputs.WRT_TEST }}

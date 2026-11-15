@@ -18,7 +18,28 @@ def set_option(path, key, old, new):
     replace_once(path, f"option {key} '{old}'", f"option {key} '{new}'")
 
 
+
+def fix_openclash_core_recipe(path):
+    """Preserve shell variables through OpenWrt's eval + recipe expansion."""
+    text = path.read_text()
+    blocks = [block for block in re.findall(r'(?ms)^define Build/Compile\n.*?^endef$', text)
+              if 'CORE_ARCH' in block]
+    if len(blocks) != 1:
+        raise RuntimeError('OpenClash core compile block changed; review upstream Makefile')
+    block = blocks[0]
+    refs = re.findall(r'\$+CORE_ARCH\b', block)
+    if len(refs) != 2 or any(ref not in ('$$CORE_ARCH', '$$$$CORE_ARCH') for ref in refs):
+        raise RuntimeError('Unexpected OpenClash CORE_ARCH references; review escaping')
+    # Build/Compile is expanded once by eval when constructing the compile rule,
+    # and again when make expands that rule. Four dollars become one in the shell.
+    fixed = re.sub(r'(?<!\$)\$\$CORE_ARCH\b', lambda _: '$$$$CORE_ARCH', block)
+    if fixed != block:
+        path.write_text(text.replace(block, fixed, 1))
+    print('OpenClash CORE_ARCH escaping verified; core source/channel unchanged.')
+
+
 def customize(root):
+    fix_openclash_core_recipe(root / 'package/luci-app-openclash/Makefile')
     netbird = root / 'package/luci-app-netbird/luci-app-netbird'
     tailscale = root / 'package/luci-app-tailscale/luci-app-tailscale'
     easytier = root / 'package/luci-app-easytier/luci-app-easytier'

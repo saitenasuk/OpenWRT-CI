@@ -82,3 +82,25 @@ cat /proc/partitions
 2026-11-14 使用真实 `VIKINGYFY/immortalwrt` 源码提交 `146dc3d5badc0531072f0d0da7114cd667cc63c2`、实际 feeds 和选定插件源码执行 `make defconfig` 与配置检查，通过 35 项覆盖配置及单机型检查；13 项本地回归测试通过。
 
 此次验证不是 GitHub 托管环境的完整构建，未编译工具链或生成可刷写固件。仍有未选中 GStreamer 插件对 video 源图形库的 3 条缺失依赖警告，当前配置未选择相关包，不影响上述配置检查；不要将它们与已经消除的 Kconfig 循环依赖混淆。
+
+## 2026-11-15：OpenClash 内置核心下载地址错误
+
+QCA-ALL #1 的串行编译日志显示下载 `clash-ORE_ARCH.tar.gz` 返回 404。原因是 OpenClash 的 `Build/Compile` 宏中的 `$$CORE_ARCH` 在 OpenWrt 的 `eval` 和 recipe 两次展开中丢失 `$C`，不是目标设备不支持 ARM64，也不是核心文件正常地址返回 404。
+
+`Scripts/customize-vpn-packages.py` 现在仅将该编译块内两处引用改为 `$$$$CORE_ARCH`，保留架构映射、下载来源、内置选项和核心渠道。运行时 shell 才把它展开成 `linux-arm64`。修补具备幂等性，并在上游结构改变时明确失败而非盲目替换。
+
+新增回归测试复现错误地址，并验证修复后的 ARM64 / x86_64 URL、未知架构拒绝，以及 `tee` 不会掩盖编译失败。正式 CI 仍先并行编译，失败后串行 `V=s` 重试，两次完整输出分别存放在：
+
+- `build-reports/compile-parallel.log`
+- `build-reports/compile-serial.log`（仅发生重试时存在）
+
+这些文件通过现有 `Upload Build Reports` 步骤上传，即使编译失败也会尝试保留。此改动不补回旧运行的完整日志。
+
+### 如何提供日志
+
+- 公开页面通常可读取状态和步骤结论；完整 Actions 日志 / Artifact 下载可能要求 GitHub 登录。Git SSH 推送凭据并不自动提供 Actions API 读取授权。
+- 已登录 GitHub 时，在失败步骤使用 View raw logs / Download log archive（名称可能随界面变化），保存为 `.txt` 或 `.zip` 再上传给助手，无须粘贴数千行。
+- 修复后的新运行也可在运行页底部 Artifacts 下载 `build-reports-*`，提供其中的 `compile-serial.log`。
+- 不要发送 GitHub 密码或访问令牌。日志分享前检查有无自定义密钥 / 私有下载地址。
+
+本地验证：21 项回归测试通过；使用实际 OpenClash Makefile 的编译块复现原来的 `ORE_ARCH` 地址，并在修复后成功执行 ARM64 核心的下载、解压、安装，校验产物为可执行 AArch64 ELF。没有执行该 ARM64 程序，也没有在本地重编译整套固件。

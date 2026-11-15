@@ -186,6 +186,8 @@ NetBird 和 whzhni1 Tailscale 由 `Scripts/PRIVATE.sh` 另行固定提交引入�
 
 ## 8. 新增源码与兼容修补
 
+- OpenClash：修正内置核心编译宏的 shell 变量转义（`$$CORE_ARCH` → `$$$$CORE_ARCH`），避免构造 `clash-ORE_ARCH.tar.gz` 错误地址；未改变渠道或版本策略。
+
 - NetBird：`looong-cat/luci-app-netbird`，提交 `de70650ff79abd24b114c045473cf16f118a3957`。
 - Tailscale：`whzhni1/luci-app-tailscale`，提交 `1274256218dd1b638a183a0e5b2bef5df17eb8d2`。
 - Tailscale：移除当前源码不存在且后端未使用的 `ucode-mod-html` 依赖；将包生命周期钩子放到 `luci.mk` include 前，避免重复 BuildPackage，同时保留包扫描标识。

@@ -103,6 +103,9 @@ option fwd_lan_ts '1'
 ''')
         self.write(self.et + '/root/etc/config/easytier', "option enabled '0'\n")
         self.write('package/luci-app-openclash/root/etc/config/openclash', "option enable '0'\n")
+        self.write('package/luci-app-openclash/Makefile',
+                   'define Build/Compile\n\tCORE_ARCH=linux-arm64; test -n "$$CORE_ARCH"; '
+                   'echo "clash-$$CORE_ARCH.tar.gz"\nendef\n')
         self.write('package/netspeedtest/luci-app-netspeedtest/Makefile',
                    'LUCI_DEPENDS:=+python3-light +python3-pkg-resources +python3-email +python3-urllib $(if $(find_package iperf3-ssl),+iperf3-ssl,+iperf3)\n')
         self.write('package/netspeedtest/luci-app-netspeedtest/root/usr/bin/speedtest', 'import csv\n')
@@ -227,6 +230,103 @@ class DefconfigLogTests(unittest.TestCase):
             result = subprocess.check_output(['make', '-s', '-f', str(p)], text=True).strip().split()
             self.assertIn('+iperf3-ssl', result)
             self.assertNotIn('+iperf3', result)
+
+
+class OpenClashCoreRecipeTests(unittest.TestCase):
+    RECIPE = r'''define Build/Compile
+	case "$(ARCH_PACKAGES)" in \
+		aarch64_*) CORE_ARCH="linux-arm64" ;; \
+		x86_64) CORE_ARCH="linux-amd64-v1" ;; \
+		*) CORE_ARCH="" ;; \
+	esac; \
+	if [ -z "$$CORE_ARCH" ]; then echo "unsupported architecture" >&2; exit 1; fi; \
+	printf '%s\n' "https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-$$CORE_ARCH.tar.gz"
+endef
+'''
+    # Model the same eval expansion that include/package.mk uses for Build/Compile.
+    HARNESS = 'define BuildRule\nall:\n\t$(Build/Compile)\nendef\n$(eval $(call BuildRule))\n'
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / 'Makefile'
+        self.path.write_text(self.RECIPE + self.HARNESS)
+
+    def run_make(self, arch='aarch64_cortex-a53'):
+        return subprocess.run(['make', '-s', '--no-print-directory', '-f', str(self.path),
+                               'ARCH_PACKAGES=' + arch, 'C='], capture_output=True, text=True)
+
+    def test_reproduces_reported_ore_arch_url_before_patch(self):
+        result = self.run_make()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('clash-ORE_ARCH.tar.gz', result.stdout)
+
+    def test_patch_preserves_arm64_download_and_is_idempotent(self):
+        with redirect_stdout(StringIO()):
+            patch.fix_openclash_core_recipe(self.path)
+            first = self.path.read_text()
+            patch.fix_openclash_core_recipe(self.path)
+        self.assertEqual(first, self.path.read_text())
+        result = self.run_make()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(),
+                         'https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-arm64.tar.gz')
+
+    def test_patch_keeps_other_architecture_mapping(self):
+        with redirect_stdout(StringIO()):
+            patch.fix_openclash_core_recipe(self.path)
+        result = self.run_make('x86_64')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('clash-linux-amd64-v1.tar.gz', result.stdout)
+
+    def test_unsupported_architecture_fails_instead_of_downloading_bad_url(self):
+        with redirect_stdout(StringIO()):
+            patch.fix_openclash_core_recipe(self.path)
+        result = self.run_make('unsupported_cpu')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('unsupported architecture', result.stderr)
+        self.assertNotIn('https://', result.stdout)
+
+    def test_unexpected_upstream_escaping_fails_loudly(self):
+        self.path.write_text(self.RECIPE.replace('$$CORE_ARCH', '$CORE_ARCH') + self.HARNESS)
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected OpenClash CORE_ARCH'):
+            patch.fix_openclash_core_recipe(self.path)
+
+
+class CompileLogTests(unittest.TestCase):
+    def run_wrapper(self, serial_status, parallel_status=2):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bin_dir = root / 'bin'
+            bin_dir.mkdir()
+            make = bin_dir / 'make'
+            make.write_text('#!/bin/sh\ncase " $* " in\n'
+                            '  *" -j1 V=s "*) echo serial-details; exit "$SERIAL_STATUS" ;;\n'
+                            '  *) echo parallel-details; exit "$PARALLEL_STATUS" ;;\nesac\n')
+            make.chmod(0o755)
+            env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'],
+                       GITHUB_WORKSPACE=str(root), SERIAL_STATUS=str(serial_status),
+                       PARALLEL_STATUS=str(parallel_status))
+            proc = subprocess.run(['bash', str(ROOT / 'Scripts/run-personal-compile.sh')],
+                                  cwd=root, env=env, capture_output=True, text=True)
+            logs = {p.name: p.read_text() for p in (root / 'build-reports').glob('*.log')}
+            return proc, logs
+
+    def test_failed_make_is_not_hidden_by_tee(self):
+        proc, logs = self.run_wrapper(2)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn('parallel-details', logs['compile-parallel.log'])
+        self.assertIn('serial-details', logs['compile-serial.log'])
+
+    def test_successful_serial_retry_is_accepted(self):
+        proc, logs = self.run_wrapper(0)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(set(logs), {'compile-parallel.log', 'compile-serial.log'})
+
+    def test_parallel_success_does_not_run_retry(self):
+        proc, logs = self.run_wrapper(2, parallel_status=0)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(set(logs), {'compile-parallel.log'})
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@
 - 插件选择集中在 `Config/PRIVATE.txt`：移除 HomeProxy、Gecoos AC、Samba4；添加 OpenClash、EasyTier、网络测速、NetBird、whzhni1 Tailscale。清单见 `docs/PLUGIN-INVENTORY.md`。
 - OpenClash 请求内置 Mihomo 核心，EasyTier / NetBird 随包构建核心；Tailscale 使用插件自己的核心下载器，不并装 feeds 的 Tailscale 服务包。VPN / OpenClash 默认关闭，NetBird / Tailscale 默认不接管 DNS、不接受远端子网路由，也不自动开放 LAN 转发。
 - `Scripts/PRIVATE.sh` 引入新源码并执行有检查的兼容修补。CI 在 `make defconfig` 后核对包和机型，缺少所选插件或恢复了排除包就失败，不静默发布残缺固件。
-- 只拉取已选插件的额外源码；在 feeds 安装前排除 video / PON，并移出未使用的 fwknopd LuCI 与 Squeezelite 扫描链接，避免无关包的循环依赖阻断 Kconfig。`WRT-TEST` 失败也上传 `build-reports`（含 `defconfig.log`、最终配置与检查输出）。
+- 只拉取已选插件的额外源码；在 feeds 安装前排除 video / PON，并移出未使用的 fwknopd LuCI 与 Squeezelite 扫描链接，避免无关包的循环依赖阻断 Kconfig。`WRT-TEST` 失败也上传 `build-reports`（含 `defconfig.log`、最终配置与检查输出）；正式编译保存完整并行 / 串行日志，便于直接上传诊断。
 
 构建与上线检查清单见 `docs/BUILD-CHECKLIST.md`。提交并推送到默认分支后，在 Actions 中手动运行 `WRT-TEST` 检查配置；确认后运行 `QCA-ALL`（`TEST=false`）编译。配置检查不等于编译通过，编译通过也不等于真机运行验证。
 

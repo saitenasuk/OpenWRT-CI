@@ -217,9 +217,7 @@ jobs:
         run: |
           cd ./wrt/
 
-          mkdir -p $GITHUB_WORKSPACE/build-reports
-          make -j$(nproc) BUILD_TIME_LOG="$GITHUB_WORKSPACE/build-reports/parallel.tsv" || \
-            make -j1 V=s BUILD_TIME_LOG="$GITHUB_WORKSPACE/build-reports/serial.tsv"
+          bash "$GITHUB_WORKSPACE/Scripts/run-personal-compile.sh"
 
       - name: Collect Build Reports
         if: ${{ always() && steps.clone-code.outcome == 'success' }}
